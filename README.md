@@ -5,7 +5,7 @@ A cozy diamond-painting game for phone browsers. Pick a color, then tap or drag 
 **Play:** open `index.html` (or the GitHub Pages site once Pages is enabled for this repo).
 
 ## Features
-- Built-in picture: *Sunset Bay*
+- 21 built-in pictures (original art painted in code): Sunset Bay, Hot Air Balloons, Koi Pond, Lighthouse Night, Strawberry, Cherry Blossom, Geo Fox, Mountain Lake, Cupcake, Rainbow Hearts, Monarch Butterfly, Snowy Cabin, Moonlight Owl, Sunflower, Desert Sunset, Northern Lights, Jellyfish, Watermelon Picnic, Ringed Planet, Red Rose, Palm Island
 - **New from photo:** choose a photo, crop it, pick a shape (portrait / square / landscape), size, 6–30 colors, speck clean-up and vivid colors. Then play it. Photos never leave the device.
 - Pinch to zoom, two fingers to pan, one finger to place (or use Move mode)
 - Find-next, per-color counts, sparkles, sound, vibration (Android)
