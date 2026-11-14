@@ -87,6 +87,21 @@
   .hint { font-size:12px; color:var(--muted); text-align:center; margin-top:6px; }
   #createBtn { width:100%; padding:14px; font-size:16px; }
   .working { opacity:.5; transition:opacity .2s; }
+  .sw .pb { width:38px; height:3px; border-radius:2px; background:#0005; overflow:hidden; }
+  .sw .pb i { display:block; height:100%; width:0; background:var(--accent); }
+  .pc .cbar { height:4px; background:#0005; border-radius:3px; overflow:hidden; margin-top:6px; }
+  .pc .cbar i { display:block; height:100%; background:linear-gradient(90deg,#c4467b,#ffc759); }
+  .pc .acts { position:absolute; top:4px; right:4px; display:flex; gap:4px; }
+  .pc .acts button { width:30px; height:30px; padding:0; border-radius:50%; background:#000b; font-size:13px; }
+  .empty { grid-column:1/-1; text-align:center; color:var(--muted); padding:40px 10px; }
+  .stack { display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .stack button { padding:12px; font-size:15px; }
+  #replayWrap { display:flex; justify-content:center; }
+  .rstack { position:relative; display:inline-block; line-height:0; box-shadow:0 8px 30px #000a; border-radius:4px; overflow:hidden; }
+  #replayFx { position:absolute; left:0; top:0; pointer-events:none; }
+  #replay .bar { max-width:360px; margin-left:auto !important; margin-right:auto !important; }
+  textarea { width:100%; margin-top:8px; font:12px ui-monospace, monospace; padding:10px; border-radius:10px; border:1px solid #ffffff22; background:#0003; color:var(--ink); resize:vertical; user-select:text; -webkit-user-select:text; }
+  #galFilter button { font-size:12px; }
 </style>
 </head>
 <body>
@@ -102,7 +117,7 @@
       <button id="modeBtn" class="on" aria-label="Toggle place or move">💎<small>Place</small></button>
       <button id="findBtn" aria-label="Find next">🔍<small>Find</small></button>
       <button id="fitBtn" aria-label="Fit to screen">⤢<small>Fit</small></button>
-      <button id="soundBtn" aria-label="Sound">🔊<small>Sound</small></button>
+      <button id="undoBtn" aria-label="Undo" disabled>↶<small>Undo</small></button>
     </div>
     <div id="toast"></div>
   </div>
@@ -112,7 +127,8 @@
 <!-- Gallery -->
 <div class="sheet" id="gallery">
   <div class="top"><h2>Pictures</h2><button id="closeGallery">Close</button></div>
-  <div class="body"><div class="grid" id="galleryGrid"></div></div>
+  <div class="body">
+    <div class="seg" id="galFilter" style="margin-bottom:14px"><button data-v="all" class="on">All</button><button data-v="progress">In progress</button><button data-v="done">Finished</button><button data-v="new">New</button></div><div class="grid" id="galleryGrid"></div></div>
 </div>
 
 <!-- Create from photo -->
@@ -176,19 +192,70 @@
 
 <div class="modal" id="menuModal"><div class="card">
   <h2>Menu</h2>
-  <p>Progress saves on this device automatically.</p>
-  <div class="row"><button id="resetBtn">Start over</button><button id="closeMenu" class="on">Close</button></div>
+  <div class="stack">
+    <button id="replayMenuBtn">▶ Watch timelapse</button>
+    <button id="settingsBtn">⚙️ Settings</button>
+    <button id="backupBtn">💾 Backup &amp; restore</button>
+    <button id="resetBtn">↺ Start over</button>
+    <button id="closeMenu" class="on">Close</button>
+  </div>
 </div></div>
 <div class="modal" id="confirmModal"><div class="card">
   <h2 id="cfTitle">Are you sure?</h2>
   <p id="cfText"></p>
   <div class="row"><button id="cfNo">Cancel</button><button id="cfYes" class="on">OK</button></div>
 </div></div>
-<div class="modal" id="doneModal"><div class="card">
-  <h2>✨ Finished! ✨</h2>
-  <p id="doneText">Every gem is in place.</p>
-  <div class="row"><button id="admireBtn" class="on">Admire it</button><button id="againBtn">Do it again</button><button id="pickBtn">New picture</button></div>
+<div class="modal" id="renameModal"><div class="card">
+  <h2>Rename</h2>
+  <input type="text" id="renameIn" maxlength="40" style="margin-bottom:16px">
+  <div class="row"><button id="renameNo">Cancel</button><button id="renameYes" class="on">Save</button></div>
 </div></div>
+
+<!-- Settings -->
+<div class="sheet" id="settings">
+  <div class="top"><h2>Settings</h2><button id="closeSettings" class="on">Done</button></div>
+  <div class="body">
+    <div class="sec"><div class="lbl"><span>Gem shape</span></div>
+      <div class="seg" id="setShape" data-k="shape"><button data-v="square">◆ Square</button><button data-v="round">● Round</button></div></div>
+    <div class="sec"><div class="lbl"><span>Placement</span></div>
+      <div class="seg" id="setMode" data-k="mode"><button data-v="relaxed">Relaxed</button><button data-v="free">Free</button></div>
+      <div class="hint" style="text-align:left">Relaxed: only the right color sticks. Free: tap any empty cell to place a gem, even the wrong color, and fix mistakes yourself (dragging still fills only matching cells).</div></div>
+    <div class="sec"><div class="lbl"><span>Highlight</span></div>
+      <div class="seg" id="setDim" data-k="dim"><button data-v="false">Brighten color</button><button data-v="true">Dim the rest</button></div></div>
+    <div class="sec"><div class="lbl"><span>Sound</span></div>
+      <div class="seg" id="setSound" data-k="sound"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+    <div class="sec"><div class="lbl"><span>Vibration</span><span>Android</span></div>
+      <div class="seg" id="setVib" data-k="vibrate"><button data-v="true">On</button><button data-v="false">Off</button></div></div>
+    <div class="hint">Tip: press and hold a color in the tray to jump to its next empty cell.</div>
+  </div>
+</div>
+
+<!-- Timelapse / finished -->
+<div class="sheet" id="replay">
+  <div class="top"><h2 id="replayTitle">Timelapse</h2><button id="replayClose">Close</button></div>
+  <div class="body" style="text-align:center">
+    <div id="replayWrap"><div class="rstack"><canvas id="replayCv"></canvas><canvas id="replayFx"></canvas></div></div>
+    <div class="bar" style="margin:12px 0 8px"><i id="replayBar"></i></div>
+    <div class="info" id="replayStats"></div>
+    <div class="row" style="margin-top:16px">
+      <button id="replayAgain">↻ Replay</button><button id="replaySave">⤓ Save image</button><button id="replayNext" class="on">New picture</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup -->
+<div class="sheet" id="backup">
+  <div class="top"><h2>Backup &amp; restore</h2><button id="closeBackup">Close</button></div>
+  <div class="body">
+    <div class="sec"><div class="lbl"><span>Make a backup</span></div>
+      <div class="hint" style="text-align:left;margin-bottom:8px">Creates a code holding all your pictures and progress. Paste it somewhere safe (a note or a message to yourself), or use it to move to another phone or browser.</div>
+      <button id="makeBackup" class="on" style="width:100%;padding:12px">Create &amp; copy backup code</button>
+      <textarea id="backupOut" readonly rows="3"></textarea></div>
+    <div class="sec"><div class="lbl"><span>Restore</span></div>
+      <textarea id="backupIn" rows="3" placeholder="Paste a backup code"></textarea>
+      <button id="restoreBackup" style="width:100%;padding:12px;margin-top:8px">Restore from code</button></div>
+  </div>
+</div>
 
 <script>
 (() => {
@@ -513,12 +580,25 @@ function saveUserPieces(){
   return store.set(IDX_KEY, JSON.stringify(userPieces.map(p => ({ id:p.id, name:p.name, W:p.W, H:p.H, palette:p.palette, pat:encPat(p.pat), created:p.created }))));
 }
 const allPieces = () => [...userPieces.slice().sort((a,b)=>(b.created||0)-(a.created||0)), ...BUILTINS];
-const fillKey = id => `diamondart.v1.${id}`;
-function loadFill(p){
-  const f = new Uint8Array(p.W*p.H), s = store.get(fillKey(p.id));
-  if (s && s.length === f.length) for (let i=0;i<s.length;i++) f[i] = s.charCodeAt(i)===49 ? 1 : 0;
-  return f;
+const stateKey = id => `diamondart.v2.${id}`;
+const u16ToB64 = a => { const u8 = new Uint8Array(new Uint16Array(a).buffer); let s=''; for (let i=0;i<u8.length;i+=8192) s += String.fromCharCode.apply(null, u8.subarray(i,i+8192)); return btoa(s); };
+const b64ToU16 = b => { const s = atob(b), u8 = new Uint8Array(s.length); for (let i=0;i<s.length;i++) u8[i] = s.charCodeAt(i); return Array.from(new Uint16Array(u8.buffer, 0, u8.length>>1)); };
+function loadState(p){
+  const n = p.W*p.H, out = { order:[], wrong:new Map(), time:0, started:0, finished:0 };
+  const s = store.get(stateKey(p.id));
+  if (s) {
+    try { const d = JSON.parse(s);
+      out.order = d.order ? b64ToU16(d.order).filter(i => i < n) : [];
+      out.wrong = new Map((d.wrong || []).filter(([i,k]) => i < n && k < p.palette.length));
+      out.time = d.time || 0; out.started = d.started || 0; out.finished = d.finished || 0;
+    } catch(e) {}
+    return out;
+  }
+  const v1 = store.get(`diamondart.v1.${p.id}`);   // migrate phase-1/2 saves
+  if (v1 && v1.length === n) for (let i=0;i<n;i++) if (v1.charCodeAt(i) === 49) out.order.push(i);
+  return out;
 }
+function clearState(id){ store.del(stateKey(id)); store.del(`diamondart.v1.${id}`); store.del('diamondart.v1.pat.' + id); }
 
 // ---------- Gem sprites ----------
 const SP = 96;
@@ -544,33 +624,76 @@ function makeGem(c, size=SP){
   return cv;
 }
 
+function makeGemRound(c, size=SP){
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const g = cv.getContext('2d'), cx = size/2, cy = size/2, r = size*.45, rt = r*.52;
+  const gr = g.createRadialGradient(cx-r*.3, cy-r*.35, r*.1, cx, cy, r);
+  gr.addColorStop(0, rgb(shade(c,.45))); gr.addColorStop(.6, rgb(c)); gr.addColorStop(1, rgb(shade(c,-.35)));
+  g.fillStyle = gr; g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.fill();
+  for (let j=0;j<8;j++){
+    const a0 = j*Math.PI/4 - Math.PI/8, a1 = a0 + Math.PI/4, am = (a0+a1)/2;
+    const light = Math.cos(am + Math.PI*.75) * .32;
+    g.fillStyle = rgb(shade(c, light), .75); g.beginPath();
+    g.moveTo(cx+Math.cos(a0)*r, cy+Math.sin(a0)*r); g.arc(cx,cy,r,a0,a1);
+    g.lineTo(cx+Math.cos(a1)*rt, cy+Math.sin(a1)*rt); g.lineTo(cx+Math.cos(a0)*rt, cy+Math.sin(a0)*rt); g.closePath(); g.fill();
+  }
+  const tg = g.createRadialGradient(cx-rt*.3, cy-rt*.3, 1, cx, cy, rt);
+  tg.addColorStop(0, rgb(shade(c,.5))); tg.addColorStop(1, rgb(shade(c,.08)));
+  g.fillStyle = tg; g.beginPath(); for (let j=0;j<8;j++){ const a = j*Math.PI/4 - Math.PI/8; g.lineTo(cx+Math.cos(a)*rt, cy+Math.sin(a)*rt); } g.closePath(); g.fill();
+  g.strokeStyle = rgb(shade(c,-.5),.45); g.lineWidth = size*.015; g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.ellipse(cx-rt*.35, cy-rt*.4, size*.07, size*.04, -.6, 0, Math.PI*2); g.fill();
+  return cv;
+}
+
+// ---------- Settings ----------
+const settings = Object.assign({ shape:'square', mode:'relaxed', dim:false, sound:true, vibrate:true },
+  (() => { try { return JSON.parse(store.get('diamondart.settings') || '{}'); } catch(e) { return {}; } })());
+if (store.get('diamondart.sound') === '0' && !store.get('diamondart.settings')) settings.sound = false;
+const saveSettings = () => store.set('diamondart.settings', JSON.stringify(settings));
+
 // ---------- Game state ----------
 let piece = null, W = 1, H = 1, pat = new Uint8Array(1), N = 0;
-let RGB = [], TINT = [], HL = [], GEMS = [];
-let total = new Int32Array(0), rem = new Int32Array(0), filled = new Uint8Array(1);
+let RGB = [], TINT = [], HL = [], DIM = [], GEMS_SQ = [], GEMS_RD = [];
+const gemSet = () => settings.shape === 'round' ? GEMS_RD : GEMS_SQ;
+let total = new Int32Array(0), rem = new Int32Array(0);
+let filled = new Uint8Array(1);      // 0 empty, 1 correct gem, 2 wrong gem
+let wrongK = new Map();              // cell -> color of a wrong gem
+let order = [];                      // correct placements, in order (for the timelapse)
+let meta = { time:0, started:0, finished:0 };
 let filledCount = 0, selected = -1, placeMode = true;
-let soundOn = store.get('diamondart.sound') !== '0';
-function recount(){ rem = new Int32Array(total); filledCount = 0; for (let i=0;i<W*H;i++) if (filled[i]) { rem[pat[i]]--; filledCount++; } }
-let saveTimer = 0;
-function save(){ const p = piece, f = filled; clearTimeout(saveTimer); saveTimer = setTimeout(() => {
-  let s=''; for (let i=0;i<f.length;i++) s += f[i]?'1':'0'; store.set(fillKey(p.id), s);
-}, 300); }
+let undoStack = [], lastAct = 0;
+
+function rebuild(){
+  filled = new Uint8Array(W*H); rem = new Int32Array(total); filledCount = 0;
+  for (const i of order) { if (!filled[i]) { filled[i] = 1; rem[pat[i]]--; filledCount++; } }
+  for (const [i] of wrongK) if (!filled[i]) filled[i] = 2; else wrongK.delete(i);
+}
+let saveTimer = 0, savePending = false;
+function writeState(){
+  clearTimeout(saveTimer); if (!savePending || !piece) return; savePending = false;
+  store.set(stateKey(piece.id), JSON.stringify({ order:u16ToB64(order), wrong:[...wrongK], time:meta.time, started:meta.started, finished:meta.finished }));
+}
+function save(){ savePending = true; clearTimeout(saveTimer); saveTimer = setTimeout(writeState, 400); }
+document.addEventListener('visibilitychange', () => { if (document.hidden) writeState(); });
+window.addEventListener('pagehide', writeState);
 
 function openPiece(p){
-  clearTimeout(saveTimer);
-  if (piece && piece !== p) { let s=''; for (let i=0;i<filled.length;i++) s += filled[i]?'1':'0'; store.set(fillKey(piece.id), s); }
+  writeState();
   ensurePiece(p); pinPattern(p);
   piece = p; W = p.W; H = p.H; pat = p.pat; N = p.palette.length;
   RGB = p.palette.map(hex2rgb);
   TINT = RGB.map(c => rgb(mix(c, PAPER_RGB, .74)));
-  HL = RGB.map(c => rgb(mix(c, PAPER_RGB, .38)));
-  GEMS = RGB.map(c => makeGem(c));
+  HL = RGB.map(c => rgb(mix(c, PAPER_RGB, .36)));
+  DIM = RGB.map(c => { const l = c[0]*.3 + c[1]*.59 + c[2]*.11; return rgb(mix([l,l,l], PAPER_RGB, .86)); });
+  GEMS_SQ = RGB.map(c => makeGem(c)); GEMS_RD = RGB.map(c => makeGemRound(c));
   total = new Int32Array(N); for (const k of pat) total[k]++;
-  filled = loadFill(p); recount();
+  const st = loadState(p);
+  order = st.order; wrongK = st.wrong; meta = { time:st.time, started:st.started, finished:st.finished };
+  rebuild(); undoStack = []; lastAct = 0;
   $('title').textContent = '💎 ' + p.name;
   store.set('diamondart.last', p.id);
   parts.length = 0; flash = null;
-  renderTray(); updateProgress(); resize(); fitView();
+  renderTray(); updateProgress(); syncUndo(); resize(); fitView();
   const first = [...Array(N).keys()].find(j => rem[j] > 0);
   selectColor(first === undefined ? -1 : first);
 }
@@ -612,53 +735,56 @@ function sparkle(cx, cy, k, n=5, big=false){
   }
 }
 let actx = null, lastClick = 0;
-function click(){
-  if (!soundOn) return;
+function audio(){ if (!actx) try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} return actx; }
+function tone(freq, end, dur, type, vol, delay=0){
+  const a = audio(); if (!a) return;
+  try {
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + delay;
+    o.type = type; o.frequency.setValueAtTime(freq, t); if (end) o.frequency.exponentialRampToValueAtTime(end, t+dur*.7);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t+.005); g.gain.exponentialRampToValueAtTime(.0001, t+dur);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+.02);
+  } catch(e) {}
+}
+function click(k=0){
+  if (!settings.sound) return;
   const now = performance.now(); if (now - lastClick < 35) return; lastClick = now;
-  try {
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(1500 + Math.random()*300, t);
-    o.frequency.exponentialRampToValueAtTime(700, t+.05);
-    g.gain.setValueAtTime(.07, t); g.gain.exponentialRampToValueAtTime(.0001, t+.07);
-    o.connect(g).connect(actx.destination); o.start(t); o.stop(t+.08);
-  } catch(e) {}
+  const base = 1100 + (N > 1 ? k/(N-1) : 0)*700;   // each color has its own pitch
+  tone(base + Math.random()*80, base*.5, .07, 'triangle', .07);
 }
-function chime(){
-  if (!soundOn || !actx) return;
-  try {
-    [880, 1109, 1319, 1760].forEach((f,i) => {
-      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i*.07;
-      o.type='sine'; o.frequency.value=f;
-      g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.08,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+.5);
-      o.connect(g).connect(actx.destination); o.start(t); o.stop(t+.55);
-    });
-  } catch(e) {}
-}
-const buzz = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch(e) {} };
+function thud(){ if (settings.sound) tone(220, 140, .12, 'sine', .08); }
+function chime(){ if (settings.sound) [880, 1109, 1319, 1760].forEach((f,i) => tone(f, 0, .5, 'sine', .08, i*.07)); }
+function fanfare(){ if (settings.sound) [523, 659, 784, 1047, 1319, 1568].forEach((f,i) => tone(f, 0, .7, 'sine', .07, i*.09)); }
+const buzz = ms => { if (!settings.vibrate) return; try { navigator.vibrate && navigator.vibrate(ms); } catch(e) {} };
 
 // ---------- Draw ----------
+function drawWrongMark(sx, sy, s){
+  const r = Math.max(2.5, s*.17), x = sx + s*.8, y = sy + s*.2;
+  ctx.fillStyle = '#e5383b'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  if (s >= 16) { ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, s*.04); const d = r*.45;
+    ctx.beginPath(); ctx.moveTo(x-d,y-d); ctx.lineTo(x+d,y+d); ctx.moveTo(x+d,y-d); ctx.lineTo(x-d,y+d); ctx.stroke(); }
+}
 function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.fillStyle = '#221d30'; ctx.fillRect(0,0,vw,vh);
-  const s = view.s, ox = view.ox, oy = view.oy;
+  const s = view.s, ox = view.ox, oy = view.oy, gems = gemSet();
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(ox-3, oy-1, W*s+12, H*s+12);
   ctx.fillStyle = PAPER; ctx.fillRect(ox-6, oy-6, W*s+12, H*s+12);
   const c0 = Math.max(0, Math.floor(-ox/s)), c1 = Math.min(W-1, Math.floor((vw-ox)/s));
   const r0 = Math.max(0, Math.floor(-oy/s)), r1 = Math.min(H-1, Math.floor((vh-oy)/s));
   const gp = s > 8 ? Math.max(.5, s*.05) : 0;
-  const showNum = s >= 12;
+  const showNum = s >= 12, dim = settings.dim && selected >= 0;
   if (showNum) { ctx.font = `600 ${Math.floor(s*.4)}px system-ui, sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; }
   for (let r=r0; r<=r1; r++) {
     const sy = oy + r*s;
     for (let c=c0; c<=c1; c++) {
-      const i = r*W+c, k = pat[i], sx = ox + c*s;
-      if (filled[i]) { ctx.drawImage(GEMS[k], sx, sy, s, s); continue; }
-      ctx.fillStyle = k === selected ? HL[k] : TINT[k];
+      const i = r*W+c, k = pat[i], sx = ox + c*s, f = filled[i];
+      if (f === 1) { ctx.drawImage(gems[k], sx, sy, s, s); continue; }
+      if (f === 2) { ctx.drawImage(gems[wrongK.get(i)], sx, sy, s, s); drawWrongMark(sx, sy, s); continue; }
+      const sel = k === selected;
+      ctx.fillStyle = sel ? HL[k] : dim ? DIM[k] : TINT[k];
       ctx.fillRect(sx+gp, sy+gp, s-gp*2, s-gp*2);
       if (showNum) {
-        ctx.fillStyle = k === selected ? 'rgba(20,15,30,.95)' : 'rgba(40,34,52,.6)';
+        ctx.fillStyle = sel ? 'rgba(20,15,30,.95)' : dim ? 'rgba(40,34,52,.28)' : 'rgba(40,34,52,.6)';
         ctx.fillText(String(k+1), sx + s/2, sy + s/2 + s*.03);
       }
     }
@@ -690,17 +816,52 @@ function loop(){
 
 // ---------- Placement ----------
 function cellAt(x, y){ return { c: Math.floor((x - view.ox)/view.s), r: Math.floor((y - view.oy)/view.s) }; }
+const inGrid = (c,r) => c>=0 && r>=0 && c<W && r<H;
+function tick(){
+  const now = Date.now();
+  if (!meta.started) meta.started = now;
+  if (lastAct && now - lastAct < 30000) meta.time += now - lastAct;   // only count active play
+  lastAct = now;
+}
+function placeCorrect(i, fromUndo=false){
+  const k = pat[i];
+  filled[i] = 1; rem[k]--; filledCount++; order.push(i);
+  if (!fromUndo) { undoStack.push({ t:'place', i }); tick(); }
+  sparkle((i%W)+.5, ((i/W)|0)+.5, k);
+  click(k); buzz(6);
+  updateSwatch(k); updateProgress(); syncUndo(); save(); dirty = true;
+  if (rem[k] === 0 && !fromUndo) colorDone(k);
+}
 function tryPlace(c, r){
-  if (c<0 || r<0 || c>=W || r>=H) return;
+  if (!inGrid(c,r) || selected < 0) return;
   const i = r*W+c;
   if (filled[i] || pat[i] !== selected) return;
-  const k = pat[i];
-  filled[i] = 1; rem[k]--; filledCount++;
-  sparkle(c+.5, r+.5, k);
-  click(); buzz(6);
-  updateSwatch(k); updateProgress(); save();
-  dirty = true;
-  if (rem[k] === 0) colorDone(k);
+  placeCorrect(i);
+}
+let wrongHinted = false;
+function placeWrong(i){
+  filled[i] = 2; wrongK.set(i, selected);
+  undoStack.push({ t:'wrong', i, k:selected }); tick();
+  thud(); buzz(20); syncUndo(); save(); dirty = true;
+  if (!wrongHinted) { toast('Wrong color! Tap it to remove'); wrongHinted = true; }
+}
+function removeWrong(i, fromUndo=false){
+  const k = wrongK.get(i); wrongK.delete(i); filled[i] = 0;
+  if (!fromUndo) undoStack.push({ t:'remove', i, k });
+  click(0); syncUndo(); save(); dirty = true;
+}
+function undo(){
+  const a = undoStack.pop(); if (!a) return;
+  if (a.t === 'place') {
+    const j = order.lastIndexOf(a.i); if (j >= 0) order.splice(j,1);
+    const k = pat[a.i]; filled[a.i] = 0; rem[k]++; filledCount--;
+    if (meta.finished) meta.finished = 0;
+    updateSwatch(k); updateProgress();
+    if (selected !== k) selectColor(k);
+  } else if (a.t === 'wrong') { wrongK.delete(a.i); filled[a.i] = 0; }
+  else if (a.t === 'remove') { wrongK.set(a.i, a.k); filled[a.i] = 2; }
+  flash = { c:a.i%W, r:(a.i/W)|0, t:performance.now() };
+  syncUndo(); save(); dirty = true;
 }
 function paintLine(a, b){
   let x0=a.c, y0=a.r; const x1=b.c, y1=b.r;
@@ -714,12 +875,14 @@ function paintLine(a, b){
 function colorDone(k){
   chime(); buzz([10,40,10]);
   let cnt=0; for (let i=0;i<W*H;i++) if (pat[i]===k && cnt++%6===0) sparkle((i%W)+.5, ((i/W)|0)+.5, k, 1, true);
-  if (filledCount === W*H) {
-    $('doneText').textContent = `Every gem is in place. ${piece.name} is complete.`;
-    setTimeout(() => show('doneModal'), 700); selectColor(-1); return;
-  }
+  if (filledCount === W*H) { finishPiece(); return; }
   const next = [...Array(N).keys()].find(j => rem[(k+1+j)%N] > 0);
   if (next !== undefined) { selectColor((k+1+next)%N); toast(`Color ${k+1} complete! ✨`); }
+}
+function finishPiece(){
+  meta.finished = Date.now(); save(); writeState(); selectColor(-1);
+  setTimeout(fanfare, 300);
+  setTimeout(() => openReplay(true), 900);
 }
 
 // ---------- Input ----------
@@ -732,12 +895,17 @@ function startPinch(){
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   ptrs.set(e.pointerId, { x:e.offsetX, y:e.offsetY });
+  audio();
   if (ptrs.size === 1) {
-    const wantPaint = placeMode && selected >= 0 && e.button === 0;
-    if (wantPaint && view.s < PAINT_MIN && performance.now() - lastToast > 2500) { toast('Zoom in to place gems'); lastToast = performance.now(); }
-    if (wantPaint && view.s >= PAINT_MIN) {
-      const cell = cellAt(e.offsetX, e.offsetY);
-      gesture = { type:'paint', last: cell };
+    const wantPaint = placeMode && e.button === 0;
+    const cell = cellAt(e.offsetX, e.offsetY);
+    if (wantPaint && view.s < PAINT_MIN) {
+      if (selected >= 0 && performance.now() - lastToast > 2500) { toast('Zoom in to place gems'); lastToast = performance.now(); }
+      gesture = { type:'pan', x:e.offsetX, y:e.offsetY };
+    } else if (wantPaint && inGrid(cell.c, cell.r) && filled[cell.r*W+cell.c] === 2) {
+      removeWrong(cell.r*W+cell.c); gesture = { type:'none' };
+    } else if (wantPaint && selected >= 0) {
+      gesture = { type:'paint', last: cell, start: cell, moved:false };
       tryPlace(cell.c, cell.r);
     } else gesture = { type:'pan', x:e.offsetX, y:e.offsetY };
   } else if (ptrs.size === 2) startPinch();
@@ -748,7 +916,7 @@ cv.addEventListener('pointermove', e => {
   if (!gesture) return;
   if (gesture.type === 'paint') {
     const cell = cellAt(e.offsetX, e.offsetY);
-    if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { paintLine(gesture.last, cell); gesture.last = cell; }
+    if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { gesture.moved = true; paintLine(gesture.last, cell); gesture.last = cell; }
   } else if (gesture.type === 'pan') {
     view.ox += e.offsetX - gesture.x; view.oy += e.offsetY - gesture.y;
     gesture.x = e.offsetX; gesture.y = e.offsetY; clampView(); dirty = true;
@@ -761,7 +929,13 @@ cv.addEventListener('pointermove', e => {
   }
 });
 function endPtr(e){
+  const wasOnly = ptrs.size === 1;
   ptrs.delete(e.pointerId);
+  // Free mode: a deliberate single tap on a non-matching empty cell places a wrong gem
+  if (wasOnly && e.type === 'pointerup' && gesture && gesture.type === 'paint' && !gesture.moved && settings.mode === 'free') {
+    const { c, r } = gesture.start;
+    if (inGrid(c,r)) { const i = r*W+c; if (!filled[i] && pat[i] !== selected) placeWrong(i); }
+  }
   if (ptrs.size === 1) { const p = [...ptrs.values()][0]; gesture = { type:'pan', x:p.x, y:p.y }; }
   else if (ptrs.size === 0) gesture = null;
 }
@@ -784,18 +958,24 @@ function renderTray(){
   for (let k=0;k<N;k++){
     const b = document.createElement('div'); b.className = 'sw';
     const g = document.createElement('canvas'); g.width = g.height = 68;
-    g.getContext('2d').drawImage(GEMS[k], 0, 0, 68, 68);
+    g.getContext('2d').drawImage(gemSet()[k], 0, 0, 68, 68);
     const n = document.createElement('div'); n.className='n'; n.textContent = k+1;
     const c = document.createElement('div'); c.className='c';
-    b.append(g,n,c);
-    b.addEventListener('click', () => { if (rem[k] > 0) selectColor(selected === k ? -1 : k); });
-    tray.append(b); swatches.push({ b, c });
+    const pb = document.createElement('div'); pb.className='pb'; const pi = document.createElement('i'); pb.append(pi);
+    b.append(g,n,c,pb);
+    let hold = 0, held = false;
+    b.addEventListener('pointerdown', () => { held = false; hold = setTimeout(() => { held = true; if (rem[k] > 0) { selectColor(k); findNext(); buzz(10); } }, 450); });
+    ['pointerup','pointerleave','pointercancel'].forEach(t => b.addEventListener(t, () => clearTimeout(hold)));
+    b.addEventListener('click', () => { if (held) return; if (rem[k] > 0) selectColor(selected === k ? -1 : k); });
+    b.addEventListener('contextmenu', e => e.preventDefault());
+    tray.append(b); swatches.push({ b, c, pi });
     updateSwatch(k);
   }
 }
 function updateSwatch(k){
   const s = swatches[k]; if (!s) return;
   s.c.textContent = rem[k] > 0 ? rem[k] : '✓';
+  s.pi.style.width = (total[k] ? (1 - rem[k]/total[k])*100 : 100) + '%';
   s.b.classList.toggle('done', rem[k] === 0);
   s.b.classList.toggle('sel', k === selected);
 }
@@ -808,25 +988,18 @@ function selectColor(k){
 function updateProgress(){
   const p = filledCount / (W*H) * 100;
   $('barFill').style.width = p + '%';
-  $('pct').textContent = (p >= 99.95 || p === 0 ? p.toFixed(0) : p.toFixed(1)) + '%';
+  $('pct').textContent = (filledCount === W*H ? '100' : p === 0 ? '0' : Math.min(99.9, Math.floor(p*10)/10).toFixed(1)) + '%';
 }
+function syncUndo(){ $('undoBtn').disabled = undoStack.length === 0; }
 let toastT = 0;
-function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1900); }
 const show = id => $(id).classList.add('show'), hide = id => $(id).classList.remove('show');
 let cfCb = null;
 function confirmBox(title, text, okLabel, cb){ $('cfTitle').textContent = title; $('cfText').textContent = text; $('cfYes').textContent = okLabel; cfCb = cb; show('confirmModal'); }
 $('cfNo').addEventListener('click', () => hide('confirmModal'));
 $('cfYes').addEventListener('click', () => { hide('confirmModal'); cfCb && cfCb(); });
 
-$('modeBtn').addEventListener('click', () => {
-  placeMode = !placeMode;
-  const b = $('modeBtn'); b.classList.toggle('on', placeMode);
-  b.innerHTML = placeMode ? '💎<small>Place</small>' : '✋<small>Move</small>';
-});
-$('fitBtn').addEventListener('click', () => fitView());
-function syncSound(){ $('soundBtn').innerHTML = (soundOn ? '🔊' : '🔇') + '<small>Sound</small>'; }
-$('soundBtn').addEventListener('click', () => { soundOn = !soundOn; syncSound(); store.set('diamondart.sound', soundOn?'1':'0'); if (soundOn) click(); });
-$('findBtn').addEventListener('click', () => {
+function findNext(){
   if (selected < 0) { const k = [...Array(N).keys()].find(j => rem[j] > 0); if (k === undefined) return; selectColor(k); }
   const ccx = (vw/2 - view.ox)/view.s, ccy = (vh/2 - view.oy)/view.s;
   let best = -1, bd = Infinity;
@@ -838,58 +1011,224 @@ $('findBtn').addEventListener('click', () => {
   view.s = Math.max(view.s, 26);
   view.ox = vw/2 - (c+.5)*view.s; view.oy = vh/2 - (r+.5)*view.s; clampView();
   flash = { c, r, t: performance.now() }; dirty = true;
+}
+$('modeBtn').addEventListener('click', () => {
+  placeMode = !placeMode;
+  const b = $('modeBtn'); b.classList.toggle('on', placeMode);
+  b.innerHTML = placeMode ? '💎<small>Place</small>' : '✋<small>Move</small>';
 });
+$('fitBtn').addEventListener('click', () => fitView());
+$('findBtn').addEventListener('click', findNext);
+$('undoBtn').addEventListener('click', undo);
 $('menuBtn').addEventListener('click', () => show('menuModal'));
 $('closeMenu').addEventListener('click', () => hide('menuModal'));
-function resetPiece(){ filled.fill(0); recount(); renderTray(); selectColor(0); updateProgress(); save(); fitView(); }
+function resetPiece(){
+  order = []; wrongK = new Map(); meta = { time:0, started:0, finished:0 }; undoStack = []; lastAct = 0;
+  rebuild(); renderTray(); selectColor(0); updateProgress(); syncUndo(); save(); fitView();
+}
 $('resetBtn').addEventListener('click', () => { hide('menuModal'); confirmBox('Start over?', `This removes every gem you've placed on ${piece.name}.`, 'Start over', resetPiece); });
-$('admireBtn').addEventListener('click', () => { hide('doneModal'); fitView(); });
-$('againBtn').addEventListener('click', () => { hide('doneModal'); resetPiece(); });
-$('pickBtn').addEventListener('click', () => { hide('doneModal'); openGallery(); });
+$('replayMenuBtn').addEventListener('click', () => { hide('menuModal'); openReplay(false); });
+$('settingsBtn').addEventListener('click', () => { hide('menuModal'); openSettings(); });
+$('backupBtn').addEventListener('click', () => { hide('menuModal'); openBackup(); });
+
+// ---------- Settings ----------
+function openSettings(){
+  for (const id of ['setShape','setMode','setDim','setSound','setVib']) {
+    const key = $(id).dataset.k;
+    [...$(id).children].forEach(b => b.classList.toggle('on', b.dataset.v === String(settings[key])));
+  }
+  show('settings');
+}
+for (const id of ['setShape','setMode','setDim','setSound','setVib']) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const key = $(id).dataset.k, v = b.dataset.v;
+    settings[key] = v === 'true' ? true : v === 'false' ? false : v;
+    [...$(id).children].forEach(x => x.classList.toggle('on', x === b));
+    saveSettings();
+    if (key === 'shape') renderTray();
+    if (key === 'sound' && settings.sound) click(0);
+    if (key === 'vibrate' && settings.vibrate) buzz(15);
+    dirty = true;
+  });
+}
+$('closeSettings').addEventListener('click', () => hide('settings'));
+
+// ---------- Timelapse / finished view ----------
+const fmtTime = ms => { const m = Math.round(ms/60000); if (m < 1) return '< 1 min'; const h = Math.floor(m/60); return h ? `${h}h ${m%60}m` : `${m} min`; };
+const fmtDate = t => new Date(t).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+let replayAnim = 0;
+function boardCanvas(cell, ord, upto, withGems=true){
+  const c = document.createElement('canvas'); c.width = W*cell + cell; c.height = H*cell + cell;
+  const g = c.getContext('2d'), pad = cell/2;
+  g.fillStyle = PAPER; g.fillRect(0,0,c.width,c.height);
+  const gp = Math.max(.5, cell*.05);
+  for (let i=0;i<W*H;i++){ g.fillStyle = TINT[pat[i]]; g.fillRect(pad+(i%W)*cell+gp, pad+((i/W)|0)*cell+gp, cell-gp*2, cell-gp*2); }
+  if (withGems) { const gems = gemSet(); for (let j=0;j<upto;j++){ const i = ord[j]; g.drawImage(gems[pat[i]], pad+(i%W)*cell, pad+((i/W)|0)*cell, cell, cell); } }
+  return c;
+}
+function openReplay(celebrate){
+  cancelAnimationFrame(replayAnim);
+  $('replayTitle').textContent = celebrate ? '✨ Finished! ✨' : piece.name;
+  const done = filledCount === W*H;
+  const bits = [`${filledCount.toLocaleString()} of ${(W*H).toLocaleString()} gems`];
+  if (meta.time) bits.push(fmtTime(meta.time));
+  if (done && meta.finished) bits.push('finished ' + fmtDate(meta.finished));
+  $('replayStats').textContent = bits.join(' · ');
+  $('replayNext').style.display = done ? '' : 'none';
+  show('replay');
+  requestAnimationFrame(() => playReplay());
+}
+function playReplay(){
+  cancelAnimationFrame(replayAnim);
+  const out = $('replayCv'), wrap = $('replayWrap');
+  const maxW = wrap.clientWidth || 320, maxH = Math.max(200, window.innerHeight*.58);
+  const d = Math.min(window.devicePixelRatio||1, 2);
+  const cell = Math.max(3, Math.floor(Math.min(maxW/(W+1), maxH/(H+1)) * d));
+  const base = boardCanvas(cell, order, 0);
+  out.width = base.width; out.height = base.height;
+  out.style.width = (base.width/d) + 'px'; out.style.height = (base.height/d) + 'px';
+  const g = out.getContext('2d'); g.drawImage(base, 0, 0);
+  const gems = gemSet(), pad = cell/2, ord = order.slice(), totalMs = Math.min(9000, 2500 + ord.length*1.2);
+  const t0 = performance.now(); let drawn = 0;
+  const sp = [];
+  const step = now => {
+    const target = Math.min(ord.length, Math.floor((now - t0)/totalMs * ord.length));
+    for (; drawn < target; drawn++){
+      const i = ord[drawn]; g.drawImage(gems[pat[i]], pad+(i%W)*cell, pad+((i/W)|0)*cell, cell, cell);
+      if (drawn % Math.max(1, Math.floor(ord.length/60)) === 0) sp.push({ x:pad+((i%W)+.5)*cell, y:pad+(((i/W)|0)+.5)*cell, life:1 });
+    }
+    // sparkles drawn on an overlay pass: redraw just their cells next frame by re-stamping gems underneath
+    $('replayBar').style.width = (ord.length ? drawn/ord.length*100 : 100) + '%';
+    const ov = $('replayFx'), og = ov.getContext('2d');
+    if (ov.width !== out.width) { ov.width = out.width; ov.height = out.height; ov.style.width = out.style.width; ov.style.height = out.style.height; }
+    og.clearRect(0,0,ov.width,ov.height);
+    for (let j=sp.length-1;j>=0;j--){ const p = sp[j]; p.life -= .03; if (p.life <= 0) { sp.splice(j,1); continue; }
+      const r = cell*1.6*p.life; og.fillStyle = `rgba(255,250,220,${p.life})`; og.beginPath();
+      og.moveTo(p.x,p.y-r); og.quadraticCurveTo(p.x,p.y,p.x+r,p.y); og.quadraticCurveTo(p.x,p.y,p.x,p.y+r); og.quadraticCurveTo(p.x,p.y,p.x-r,p.y); og.quadraticCurveTo(p.x,p.y,p.x,p.y-r); og.fill(); }
+    if (drawn < ord.length || sp.length) replayAnim = requestAnimationFrame(step);
+  };
+  replayAnim = requestAnimationFrame(step);
+}
+$('replayAgain').addEventListener('click', playReplay);
+$('replayClose').addEventListener('click', () => { cancelAnimationFrame(replayAnim); hide('replay'); fitView(); });
+$('replayNext').addEventListener('click', () => { cancelAnimationFrame(replayAnim); hide('replay'); openGallery(); });
+$('replaySave').addEventListener('click', async () => {
+  const cell = Math.max(8, Math.min(28, Math.floor(3000/Math.max(W,H))));
+  const c = boardCanvas(cell, order, order.length);
+  const name = piece.name.replace(/[^\w\- ]+/g,'').trim() || 'diamond-art';
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  if (!blob) { toast("Couldn't make the image"); return; }
+  const file = new File([blob], name + '.png', { type:'image/png' });
+  try { if (navigator.canShare && navigator.canShare({ files:[file] })) { await navigator.share({ files:[file], title:piece.name }); return; } } catch(e) { if (e && e.name === 'AbortError') return; }
+  if (window.self !== window.top) { toast('Saving images works from your GitHub Pages site'); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name + '.png'; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+});
 
 // ---------- Gallery ----------
-function thumb(p){
+let galFilter = 'all';
+function pieceStats(p){
+  const st = p === piece ? { order, time:meta.time, finished:meta.finished } : loadState(p);
+  const n = st.order.length, tot = p.W*p.H;
+  return { n, tot, pct: Math.floor(n/tot*100), done: n >= tot, time: st.time, order: st.order };
+}
+function thumb(p, st){
   ensurePiece(p);
   const c = document.createElement('canvas'); c.width = p.W; c.height = p.H;
   const g = c.getContext('2d'), img = g.createImageData(p.W, p.H);
-  const cols = p.palette.map(hex2rgb), f = p === piece ? filled : loadFill(p);
-  let n = 0; for (let i=0;i<f.length;i++) n += f[i];
+  const cols = p.palette.map(hex2rgb), f = new Uint8Array(p.W*p.H); for (const i of st.order) f[i] = 1;
   for (let i=0;i<p.W*p.H;i++){
-    const col = f[i] || n === 0 ? cols[p.pat[i]] : mix(cols[p.pat[i]], PAPER_RGB, .62);
+    const col = f[i] || st.n === 0 ? cols[p.pat[i]] : mix(cols[p.pat[i]], PAPER_RGB, .62);
     img.data[i*4]=col[0]; img.data[i*4+1]=col[1]; img.data[i*4+2]=col[2]; img.data[i*4+3]=255;
   }
   g.putImageData(img,0,0);
-  return { c, pct: Math.floor(n/f.length*100) };
+  return c;
 }
 function openGallery(){
+  writeState();
   const grid = $('galleryGrid'); grid.innerHTML = '';
-  const nb = document.createElement('button'); nb.className = 'pc newcard';
-  nb.innerHTML = '<b>＋</b>New from photo';
-  nb.addEventListener('click', () => { hide('gallery'); openCreate(); });
-  grid.append(nb);
+  [...$('galFilter').children].forEach(b => b.classList.toggle('on', b.dataset.v === galFilter));
+  if (galFilter === 'all') {
+    const nb = document.createElement('button'); nb.className = 'pc newcard';
+    nb.innerHTML = '<b>＋</b>New from photo';
+    nb.addEventListener('click', () => { hide('gallery'); openCreate(); });
+    grid.append(nb);
+  }
+  let shown = 0;
   for (const p of allPieces()) {
+    ensurePiece(p);
+    const st = pieceStats(p);
+    const cat = st.done ? 'done' : st.n > 0 ? 'progress' : 'new';
+    if (galFilter !== 'all' && galFilter !== cat) continue;
+    shown++;
     const d = document.createElement('div'); d.className = 'pc' + (p === piece ? ' cur' : '');
-    const t = thumb(p);
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = p.name;
-    const meta = document.createElement('div'); meta.className = 'meta';
-    meta.textContent = `${p.W}×${p.H} · ${p.palette.length} colors · ${t.pct === 100 ? 'done ✓' : t.pct + '%'}`;
-    d.append(t.c, nm, meta);
+    const meta2 = document.createElement('div'); meta2.className = 'meta';
+    const tm = st.time ? ' · ' + fmtTime(st.time) : '';
+    meta2.textContent = st.done ? `✓ Finished${tm}` : st.n ? `${st.pct || '<1'}% done${tm}` : `${p.W}×${p.H} · ${p.palette.length} colors`;
+    if (st.n && !st.done) { const bar = document.createElement('div'); bar.className = 'cbar'; const bi = document.createElement('i'); bi.style.width = st.pct+'%'; bar.append(bi); d.append(thumb(p, st), bar, nm, meta2); }
+    else d.append(thumb(p, st), nm, meta2);
     d.addEventListener('click', () => { hide('gallery'); if (p !== piece) openPiece(p); });
+    const acts = document.createElement('div'); acts.className = 'acts';
+    const mkBtn = (txt, label, fn) => { const x = document.createElement('button'); x.textContent = txt; x.setAttribute('aria-label', label); x.addEventListener('click', e => { e.stopPropagation(); fn(); }); acts.append(x); };
+    if (st.done) mkBtn('▶', 'Watch timelapse', () => { hide('gallery'); if (p !== piece) openPiece(p); openReplay(false); });
     if (!p.builtin) {
-      const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.setAttribute('aria-label','Delete');
-      x.addEventListener('click', e => { e.stopPropagation(); confirmBox('Delete picture?', `${p.name} and its progress will be removed from this device.`, 'Delete', () => {
-        userPieces = userPieces.filter(q => q !== p); saveUserPieces(); store.del(fillKey(p.id));
-        if (p === piece) openPiece(allPieces()[0]);
+      mkBtn('✎', 'Rename', () => openRename(p));
+      mkBtn('✕', 'Delete', () => confirmBox('Delete picture?', `${p.name} and its progress will be removed from this device.`, 'Delete', () => {
+        userPieces = userPieces.filter(q => q !== p); saveUserPieces(); clearState(p.id);
+        if (p === piece) { piece = null; openPiece(allPieces()[0]); }
         openGallery();
-      }); });
-      d.append(x);
+      }));
     }
+    if (acts.children.length) d.append(acts);
     grid.append(d);
   }
+  if (!shown && galFilter !== 'all') { const e = document.createElement('div'); e.className = 'empty'; e.textContent = galFilter === 'done' ? 'No finished pictures yet — keep going! 💎' : galFilter === 'progress' ? 'Nothing in progress.' : 'You\'ve started every picture!'; grid.append(e); }
   show('gallery');
 }
+$('galFilter').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; galFilter = b.dataset.v; openGallery(); });
 $('galleryBtn').addEventListener('click', openGallery);
 $('closeGallery').addEventListener('click', () => hide('gallery'));
+let renameTarget = null;
+function openRename(p){ renameTarget = p; $('renameIn').value = p.name; show('renameModal'); setTimeout(() => $('renameIn').focus(), 50); }
+$('renameNo').addEventListener('click', () => hide('renameModal'));
+$('renameYes').addEventListener('click', () => {
+  const v = $('renameIn').value.trim().slice(0,40); if (!v || !renameTarget) return;
+  renameTarget.name = v; saveUserPieces(); if (renameTarget === piece) $('title').textContent = '💎 ' + v;
+  hide('renameModal'); openGallery();
+});
+
+// ---------- Backup & restore ----------
+function openBackup(){ $('backupOut').value = ''; $('backupIn').value = ''; show('backup'); }
+$('closeBackup').addEventListener('click', () => hide('backup'));
+$('makeBackup').addEventListener('click', async () => {
+  writeState();
+  const states = {}, pats = {};
+  for (const p of allPieces()) { const s = store.get(stateKey(p.id)); if (s) states[p.id] = s; const pp = store.get('diamondart.v1.pat.' + p.id); if (pp) pats[p.id] = pp; }
+  const data = { app:'diamondart', v:2, pieces: store.get(IDX_KEY) || '[]', states, pats, settings };
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+  $('backupOut').value = code;
+  try { await navigator.clipboard.writeText(code); toast('Backup code copied ✓'); } catch(e) { $('backupOut').select(); toast('Select the code and copy it'); }
+});
+$('restoreBackup').addEventListener('click', () => {
+  let data; try { data = JSON.parse(decodeURIComponent(escape(atob($('backupIn').value.trim())))); } catch(e) { toast("That code doesn't look right"); return; }
+  if (!data || data.app !== 'diamondart') { toast("That code doesn't look right"); return; }
+  confirmBox('Restore backup?', 'Pictures in the backup are added, and their progress replaces what is on this device.', 'Restore', () => {
+    writeState();
+    const incoming = JSON.parse(data.pieces || '[]'), mine = JSON.parse(store.get(IDX_KEY) || '[]');
+    const byId = new Map(mine.map(p => [p.id, p])); for (const p of incoming) byId.set(p.id, p);
+    store.set(IDX_KEY, JSON.stringify([...byId.values()]));
+    for (const [id, s] of Object.entries(data.pats || {})) store.set('diamondart.v1.pat.' + id, s);
+    for (const [id, s] of Object.entries(data.states || {})) store.set(stateKey(id), s);
+    if (data.settings) { Object.assign(settings, data.settings); saveSettings(); }
+    userPieces = loadUserPieces();
+    for (const b of BUILTINS) if (b.paint) { b.pat = null; }
+    const cur = allPieces().find(p => p.id === piece.id) || allPieces()[0];
+    piece = null; openPiece(cur);
+    hide('backup'); toast('Backup restored ✓');
+  });
+});
 
 // ---------- Photo -> pattern pipeline ----------
 const SIZES = { portrait:[[36,48],[54,72],[75,100]], square:[[44,44],[64,64],[88,88]], landscape:[[48,36],[72,54],[100,75]] };
@@ -1102,7 +1441,6 @@ window.addEventListener('resize', () => { if ($('create').classList.contains('sh
 
 // ---------- Boot ----------
 window.addEventListener('resize', () => { resize(); clampView(); });
-syncSound();
 const lastId = store.get('diamondart.last');
 const startPiece = allPieces().find(p => p.id === lastId) || BUILTINS[0];
 openPiece(startPiece);
