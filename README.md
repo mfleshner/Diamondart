@@ -7,6 +7,7 @@ A cozy diamond-painting game for phone browsers. Pick a color, then tap or drag 
 ## Features
 - 20 detailed built-in scenes (original art painted in code, 72×72 up to 75×100, 22–28 colors) plus the classic Sunset Bay starter
 - **New from photo:** choose a photo, crop it, pick a shape (portrait / square / landscape), size (up to 75×100), 8–50 colors, detail sharpening, speck clean-up and vivid colors. Then play it. Photos never leave the device.
+- **Fix-it mode:** every gem starts in the wrong spot (each color's count stays exact). Tap or drag across gems to send them to the bank at the bottom, then place them where they belong. Choose it when opening a new picture, or from the ⋯ menu
 - Pinch to zoom, two fingers to pan, one finger to place (or use Move mode)
 - Square or round faceted gems, per-color sounds, sparkles, vibration (Android)
 - Relaxed mode (only the right color sticks) or Free mode (mistakes allowed, tap to remove), plus Undo

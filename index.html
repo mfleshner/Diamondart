@@ -38,11 +38,18 @@
     padding:6px 0 4px; border-radius:12px; border:2px solid transparent; background:#ffffff0a; cursor:pointer; }
   .sw.sel { border-color:var(--accent); background:#ffc75922; }
   .sw.done { opacity:.4; }
+  .sw.nobank { opacity:.45; }
+  .sw.bump { animation: bump .3s; }
+  @keyframes bump { 50% { transform: scale(1.15); } }
+  .sw .c { white-space:nowrap; }
+  #bankLbl { font-size:11px; color:var(--muted); text-align:center; padding:0 8px 6px; }
+  .fly { position:fixed; left:0; top:0; width:28px; height:28px; pointer-events:none; z-index:30; transition: transform .4s cubic-bezier(.5,0,.6,1), opacity .4s; }
+  .stack button small { font-weight:400; font-size:12px; opacity:.8; }
   .sw canvas { width:34px; height:34px; }
   .sw .n { font-size:12px; font-weight:700; }
   .sw .c { font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
   #toast { position:absolute; left:50%; bottom:16px; transform:translateX(-50%) translateY(20px); opacity:0;
-    background:#000c; padding:8px 14px; border-radius:20px; font-size:13px; transition:.25s; pointer-events:none; white-space:nowrap; z-index:3; }
+    background:#000c; padding:8px 14px; border-radius:20px; font-size:13px; transition:.25s; pointer-events:none; max-width:88%; width:max-content; text-align:center; z-index:3; }
   #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .modal { position:fixed; inset:0; background:#0009; display:none; align-items:center; justify-content:center; z-index:20; padding:24px; }
   .modal.show { display:flex; }
@@ -122,7 +129,7 @@
     </div>
     <div id="toast"></div>
   </div>
-  <footer><div id="tray"></div></footer>
+  <footer><div id="bankLbl" style="display:none">🏦 Bank: tap or drag across gems on the picture to collect them here</div><div id="tray"></div></footer>
 </div>
 
 <!-- Gallery -->
@@ -200,6 +207,7 @@
 <div class="modal" id="menuModal"><div class="card">
   <h2>Menu</h2>
   <div class="stack">
+    <button id="fixMenuBtn">🔀 Fix-it puzzle</button>
     <button id="replayMenuBtn">▶ Watch timelapse</button>
     <button id="settingsBtn">⚙️ Settings</button>
     <button id="backupBtn">💾 Backup &amp; restore</button>
@@ -212,6 +220,13 @@
   <h2 id="cfTitle">Are you sure?</h2>
   <p id="cfText"></p>
   <div class="row"><button id="cfNo">Cancel</button><button id="cfYes" class="on">OK</button></div>
+</div></div>
+<div class="modal" id="playModal"><div class="card">
+  <h2>How do you want to play?</h2>
+  <div class="stack">
+    <button id="playClassic" class="on">💎 Classic<br><small>Place every gem on an empty canvas</small></button>
+    <button id="playFix">🔀 Fix-it<br><small>Every gem starts in the wrong spot. Tap them into the bank, then put them where they belong</small></button>
+  </div>
 </div></div>
 <div class="modal" id="renameModal"><div class="card">
   <h2>Rename</h2>
@@ -268,7 +283,7 @@
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const BUILD = { n: 6, date: '2026-11-14' };   // bump on every release
+const BUILD = { n: 7, date: '2026-11-14' };   // bump on every release
 $('buildInfo').textContent = `Build ${BUILD.n} · ${BUILD.date}`;
 const store = {
   get(k){ try { return localStorage.getItem(k); } catch(e) { return null; } },
@@ -863,13 +878,14 @@ const stateKey = id => `diamondart.v2.${id}`;
 const u16ToB64 = a => { const u8 = new Uint8Array(new Uint16Array(a).buffer); let s=''; for (let i=0;i<u8.length;i+=8192) s += String.fromCharCode.apply(null, u8.subarray(i,i+8192)); return btoa(s); };
 const b64ToU16 = b => { const s = atob(b), u8 = new Uint8Array(s.length); for (let i=0;i<s.length;i++) u8[i] = s.charCodeAt(i); return Array.from(new Uint16Array(u8.buffer, 0, u8.length>>1)); };
 function loadState(p){
-  const n = p.W*p.H, out = { order:[], wrong:new Map(), time:0, started:0, finished:0 };
+  const n = p.W*p.H, out = { order:[], wrong:new Map(), time:0, started:0, finished:0, mode:'classic', bank:[] };
   const s = store.get(stateKey(p.id));
   if (s) {
     try { const d = JSON.parse(s);
       out.order = d.order ? b64ToU16(d.order).filter(i => i < n) : [];
       out.wrong = new Map((d.wrong || []).filter(([i,k]) => i < n && k < p.palette.length));
       out.time = d.time || 0; out.started = d.started || 0; out.finished = d.finished || 0;
+      out.mode = d.mode === 'fix' ? 'fix' : 'classic'; out.bank = Array.isArray(d.bank) ? d.bank : [];
     } catch(e) {}
     return out;
   }
@@ -940,6 +956,8 @@ let wrongK = new Map();              // cell -> color of a wrong gem
 let order = [];                      // correct placements, in order (for the timelapse)
 let meta = { time:0, started:0, finished:0 };
 let filledCount = 0, selected = -1, placeMode = true;
+let mode = 'classic';                // 'classic' or 'fix' (Fix-it: every gem starts in the wrong spot)
+let bank = new Int32Array(0);        // Fix-it: gems taken off the picture, per color
 let undoStack = [], lastAct = 0;
 
 function rebuild(){
@@ -950,7 +968,7 @@ function rebuild(){
 let saveTimer = 0, savePending = false;
 function writeState(){
   clearTimeout(saveTimer); if (!savePending || !piece) return; savePending = false;
-  store.set(stateKey(piece.id), JSON.stringify({ order:u16ToB64(order), wrong:[...wrongK], time:meta.time, started:meta.started, finished:meta.finished }));
+  store.set(stateKey(piece.id), JSON.stringify({ order:u16ToB64(order), wrong:[...wrongK], time:meta.time, started:meta.started, finished:meta.finished, mode, bank:Array.from(bank) }));
 }
 function save(){ savePending = true; clearTimeout(saveTimer); saveTimer = setTimeout(writeState, 400); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) writeState(); });
@@ -968,12 +986,13 @@ function openPiece(p){
   total = new Int32Array(N); for (const k of pat) total[k]++;
   const st = loadState(p);
   order = st.order; wrongK = st.wrong; meta = { time:st.time, started:st.started, finished:st.finished };
+  mode = st.mode; bank = new Int32Array(N); st.bank.forEach((v,k) => { if (k < N) bank[k] = v|0; });
   rebuild(); undoStack = []; lastAct = 0;
   $('title').textContent = '💎 ' + p.name;
   store.set('diamondart.last', p.id);
   parts.length = 0; flash = null;
-  renderTray(); updateProgress(); syncUndo(); resize(); fitView();
-  const first = [...Array(N).keys()].find(j => rem[j] > 0);
+  syncModeUI(); renderTray(); updateProgress(); syncUndo(); resize(); fitView();
+  const first = mode === 'fix' ? [...Array(N).keys()].find(j => bank[j] > 0 && rem[j] > 0) : [...Array(N).keys()].find(j => rem[j] > 0);
   selectColor(first === undefined ? -1 : first);
 }
 
@@ -1058,7 +1077,7 @@ function draw(){
     for (let c=c0; c<=c1; c++) {
       const i = r*W+c, k = pat[i], sx = ox + c*s, f = filled[i];
       if (f === 1) { ctx.drawImage(gems[k], sx, sy, s, s); continue; }
-      if (f === 2) { ctx.drawImage(gems[wrongK.get(i)], sx, sy, s, s); drawWrongMark(sx, sy, s); continue; }
+      if (f === 2) { ctx.drawImage(gems[wrongK.get(i)], sx, sy, s, s); if (mode !== 'fix') drawWrongMark(sx, sy, s); continue; }
       const sel = k === selected;
       ctx.fillStyle = sel ? HL[k] : dim ? DIM[k] : TINT[k];
       ctx.fillRect(sx+gp, sy+gp, s-gp*2, s-gp*2);
@@ -1105,20 +1124,23 @@ function tick(){
 function placeCorrect(i, fromUndo=false){
   const k = pat[i];
   filled[i] = 1; rem[k]--; filledCount++; order.push(i); placedTotal++;
+  if (mode === 'fix' && !fromUndo) bank[k]--;
   if (!fromUndo) { undoStack.push({ t:'place', i }); tick(); }
   sparkle((i%W)+.5, ((i/W)|0)+.5, k);
   click(k); buzz(6);
   updateSwatch(k); updateProgress(); syncUndo(); save(); dirty = true;
   if (rem[k] === 0 && !fromUndo) colorDone(k);
 }
+const canPlace = () => selected >= 0 && (mode !== 'fix' || bank[selected] > 0);
 function tryPlace(c, r){
-  if (!inGrid(c,r) || selected < 0) return;
+  if (!inGrid(c,r) || !canPlace()) return;
   const i = r*W+c;
   if (filled[i] || pat[i] !== selected) return;
   placeCorrect(i);
 }
 let wrongHinted = false;
 function placeWrong(i){
+  if (mode === 'fix') { if (bank[selected] <= 0) return; bank[selected]--; updateSwatch(selected); }
   filled[i] = 2; wrongK.set(i, selected);
   undoStack.push({ t:'wrong', i, k:selected }); tick();
   thud(); buzz(20); syncUndo(); save(); dirty = true;
@@ -1134,10 +1156,12 @@ function undo(){
   if (a.t === 'place') {
     const j = order.lastIndexOf(a.i); if (j >= 0) order.splice(j,1);
     const k = pat[a.i]; filled[a.i] = 0; rem[k]++; filledCount--;
+    if (mode === 'fix') bank[k]++;
     if (meta.finished) meta.finished = 0;
     updateSwatch(k); updateProgress();
     if (selected !== k) selectColor(k);
-  } else if (a.t === 'wrong') { wrongK.delete(a.i); filled[a.i] = 0; }
+  } else if (a.t === 'wrong') { wrongK.delete(a.i); filled[a.i] = 0; if (mode === 'fix') { bank[a.k]++; updateSwatch(a.k); } }
+  else if (a.t === 'pick') { bank[a.k]--; wrongK.set(a.i, a.k); filled[a.i] = 2; updateSwatch(a.k); }
   else if (a.t === 'remove') { wrongK.set(a.i, a.k); filled[a.i] = 2; }
   flash = { c:a.i%W, r:(a.i/W)|0, t:performance.now() };
   syncUndo(); save(); dirty = true;
@@ -1155,9 +1179,78 @@ function colorDone(k){
   chime(); buzz([10,40,10]);
   let cnt=0; for (let i=0;i<W*H;i++) if (pat[i]===k && cnt++%6===0) sparkle((i%W)+.5, ((i/W)|0)+.5, k, 1, true);
   if (filledCount === W*H) { finishPiece(); return; }
-  const next = [...Array(N).keys()].find(j => rem[(k+1+j)%N] > 0);
+  const next = [...Array(N).keys()].find(j => rem[(k+1+j)%N] > 0 && (mode !== 'fix' || bank[(k+1+j)%N] > 0));
   if (next !== undefined) { selectColor((k+1+next)%N); toast(`Color ${k+1} complete! ✨`); }
 }
+// ---------- Fix-it ----------
+function startFix(){
+  const n = W*H, R = rng(Date.now() | 0);
+  // Shuffle all the gems randomly, then swap away any that landed on their own color.
+  // Every color keeps its exact count, and no gem starts in a correct spot.
+  const cur = Uint8Array.from(pat);
+  for (let j=n-1;j>0;j--){ const t = Math.floor(R()*(j+1)); const v = cur[j]; cur[j] = cur[t]; cur[t] = v; }
+  for (let pass=0; pass<3; pass++) for (let i=0;i<n;i++){
+    if (cur[i] !== pat[i]) continue;
+    for (let tries=0; tries<60; tries++){
+      const j = Math.floor(R()*n);
+      if (cur[j] !== pat[i] && cur[i] !== pat[j]) { const v = cur[i]; cur[i] = cur[j]; cur[j] = v; break; }
+    }
+  }
+  order = []; wrongK = new Map();
+  for (let i=0;i<n;i++){ if (cur[i] === pat[i]) order.push(i); else wrongK.set(i, cur[i]); }
+  mode = 'fix'; bank = new Int32Array(N);
+  meta = { time:0, started:0, finished:0 }; undoStack = []; lastAct = 0;
+  rebuild(); syncModeUI(); renderTray(); selectColor(-1); updateProgress(); syncUndo(); save(); writeState(); fitView();
+  setTimeout(() => toast('Every gem is misplaced! Tap them into the bank'), 300);
+}
+let lastFly = 0;
+function flyToBank(k, x, y){
+  const now = performance.now(); if (now - lastFly < 70) return; lastFly = now;
+  const sw = swatches[k]; if (!sw) return;
+  const r0 = cv.getBoundingClientRect(), r1 = sw.b.getBoundingClientRect();
+  const el = document.createElement('canvas'); el.width = el.height = 48; el.className = 'fly';
+  el.getContext('2d').drawImage(gemSet()[k], 0, 0, 48, 48);
+  const sx = r0.left + x - 14, sy = r0.top + y - 14;
+  el.style.transform = `translate(${sx}px,${sy}px) scale(1)`; document.body.append(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = `translate(${r1.left + r1.width/2 - 14}px,${r1.top + 14}px) scale(.7)`; el.style.opacity = '.4'; }));
+  setTimeout(() => { el.remove(); sw.b.classList.remove('bump'); void sw.b.offsetWidth; sw.b.classList.add('bump'); }, 420);
+}
+function pickOff(i, x, y, quiet=false){
+  if (filled[i] !== 2) return false;
+  const k = wrongK.get(i); wrongK.delete(i); filled[i] = 0; bank[k]++;
+  undoStack.push({ t:'pick', i, k }); tick();
+  sparkle((i%W)+.5, ((i/W)|0)+.5, k, 3);
+  if (!quiet) { if (settings.sound) tone(500, 950, .07, 'sine', .06); buzz(5); }
+  if (x !== undefined) flyToBank(k, x, y);
+  if (!canPlace() && rem[k] > 0) selectColor(k);
+  updateSwatch(k); syncUndo(); save(); dirty = true;
+  return true;
+}
+function nearestWrong(x, y, rad){
+  const fx = (x - view.ox)/view.s, fy = (y - view.oy)/view.s, R = Math.min(8, rad/view.s);
+  let best = -1, bd = R*R;
+  for (let r = Math.max(0, Math.floor(fy-R)); r <= Math.min(H-1, Math.floor(fy+R)); r++)
+    for (let c = Math.max(0, Math.floor(fx-R)); c <= Math.min(W-1, Math.floor(fx+R)); c++){
+      const i = r*W+c; if (filled[i] !== 2) continue;
+      const d = (c+.5-fx)**2 + (r+.5-fy)**2; if (d < bd) { bd = d; best = i; }
+    }
+  return best;
+}
+function pickLine(a, b, x, y){
+  let x0=a.c, y0=a.r; const x1=b.c, y1=b.r;
+  const dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1; let err=dx+dy;
+  for (let n=0; n<400; n++) {
+    if (inGrid(x0,y0)) pickOff(y0*W+x0, x, y, true);
+    if (x0===x1 && y0===y1) break;
+    const e2=2*err; if (e2>=dy){err+=dy;x0+=sx;} if (e2<=dx){err+=dx;y0+=sy;}
+  }
+}
+function syncModeUI(){
+  const fix = mode === 'fix';
+  $('bankLbl').style.display = fix ? '' : 'none';
+  document.body.classList.toggle('fixmode', fix);
+}
+
 function finishPiece(){
   meta.finished = Date.now(); save(); writeState(); selectColor(-1);
   setTimeout(fanfare, 300);
@@ -1197,7 +1290,16 @@ cv.addEventListener('pointerdown', e => {
   if (ptrs.size === 1) {
     const wantPaint = placeMode && e.button === 0;
     const cell = cellAt(e.offsetX, e.offsetY);
-    if (wantPaint && view.s >= 8 && inGrid(cell.c, cell.r) && filled[cell.r*W+cell.c] === 2) {
+    const ex = inGrid(cell.c, cell.r) ? cell.r*W+cell.c : -1;
+    if (wantPaint && mode === 'fix' && ex >= 0 && filled[ex] === 0 && pat[ex] !== selected && bank[pat[ex]] > 0) selectColor(pat[ex]);
+    if (wantPaint && mode === 'fix' && ex >= 0 && filled[ex] === 2) {
+      gesture = { type:'pick', last: cell }; pickOff(ex, e.offsetX, e.offsetY);
+    } else if (wantPaint && mode === 'fix' && !(ex >= 0 && filled[ex] === 0 && canPlace()) && nearestWrong(e.offsetX, e.offsetY, TAP_SNAP) >= 0) {
+      gesture = { type:'pick', last: cell }; pickOff(nearestWrong(e.offsetX, e.offsetY, TAP_SNAP), e.offsetX, e.offsetY);
+    } else if (wantPaint && mode === 'fix' && !canPlace()) {
+      if (performance.now() - lastToast > 2500) { toast(selected < 0 ? 'Pick a color from the bank first' : `No color ${selected+1} gems in the bank yet`); lastToast = performance.now(); }
+      gesture = { type:'pan', x:e.offsetX, y:e.offsetY };
+    } else if (wantPaint && view.s >= 8 && ex >= 0 && filled[ex] === 2) {
       removeWrong(cell.r*W+cell.c); gesture = { type:'none' };
     } else if (wantPaint && selected >= 0) {
       // Placing works at any zoom; a fingertip snaps to the nearest matching cell
@@ -1215,6 +1317,9 @@ cv.addEventListener('pointermove', e => {
     if (Math.hypot(e.offsetX - gesture.x0, e.offsetY - gesture.y0) > 10) gesture.moved = true;
     if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { paintLine(gesture.last, cell); gesture.last = cell; }
     paintAt(e.offsetX, e.offsetY, DRAG_SNAP);
+  } else if (gesture.type === 'pick') {
+    const cell = cellAt(e.offsetX, e.offsetY);
+    if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { pickLine(gesture.last, cell, e.offsetX, e.offsetY); gesture.last = cell; if (settings.sound) tone(520, 900, .05, 'sine', .04); }
   } else if (gesture.type === 'pan') {
     view.ox += e.offsetX - gesture.x; view.oy += e.offsetY - gesture.y;
     gesture.x = e.offsetX; gesture.y = e.offsetY; clampView(); dirty = true;
@@ -1263,9 +1368,11 @@ function renderTray(){
     const pb = document.createElement('div'); pb.className='pb'; const pi = document.createElement('i'); pb.append(pi);
     b.append(g,n,c,pb);
     let hold = 0, held = false;
-    b.addEventListener('pointerdown', () => { held = false; hold = setTimeout(() => { held = true; if (rem[k] > 0) { selectColor(k); findNext(); buzz(10); } }, 450); });
+    b.addEventListener('pointerdown', () => { held = false; hold = setTimeout(() => { held = true; if (rem[k] > 0 && (mode !== 'fix' || bank[k] > 0)) { selectColor(k); findNext(); buzz(10); } }, 450); });
     ['pointerup','pointerleave','pointercancel'].forEach(t => b.addEventListener(t, () => clearTimeout(hold)));
-    b.addEventListener('click', () => { if (held) return; if (rem[k] > 0) selectColor(selected === k ? -1 : k); });
+    b.addEventListener('click', () => { if (held) return;
+      if (mode === 'fix' && bank[k] <= 0) { toast(rem[k] > 0 ? `No color ${k+1} in the bank yet — tap gems on the picture` : `Color ${k+1} is all done ✓`); return; }
+      if (rem[k] > 0 || (mode === 'fix' && bank[k] > 0)) selectColor(selected === k ? -1 : k); });
     b.addEventListener('contextmenu', e => e.preventDefault());
     tray.append(b); swatches.push({ b, c, pi });
     updateSwatch(k);
@@ -1273,7 +1380,10 @@ function renderTray(){
 }
 function updateSwatch(k){
   const s = swatches[k]; if (!s) return;
-  s.c.textContent = rem[k] > 0 ? rem[k] : '✓';
+  if (mode === 'fix') {
+    s.c.textContent = rem[k] === 0 && bank[k] === 0 ? '✓' : '🏦 ' + bank[k];
+    s.b.classList.toggle('nobank', bank[k] === 0 && rem[k] > 0);
+  } else { s.c.textContent = rem[k] > 0 ? rem[k] : '✓'; s.b.classList.remove('nobank'); }
   s.pi.style.width = (total[k] ? (1 - rem[k]/total[k])*100 : 100) + '%';
   s.b.classList.toggle('done', rem[k] === 0);
   s.b.classList.toggle('sel', k === selected);
@@ -1299,6 +1409,14 @@ $('cfNo').addEventListener('click', () => hide('confirmModal'));
 $('cfYes').addEventListener('click', () => { hide('confirmModal'); cfCb && cfCb(); });
 
 function findNext(){
+  if (mode === 'fix') {
+    const hasSpot = k => { for (let i=0;i<W*H;i++) if (!filled[i] && pat[i] === k) return true; return false; };
+    if (!(canPlace() && hasSpot(selected))) {
+      const k = [...Array(N).keys()].find(j => bank[j] > 0 && hasSpot(j));
+      if (k === undefined) { toast(wrongK.size ? 'None of the empty spots match the bank yet. Collect more gems' : 'Nothing left to place'); return; }
+      selectColor(k);
+    }
+  }
   if (selected < 0) { const k = [...Array(N).keys()].find(j => rem[j] > 0); if (k === undefined) return; selectColor(k); }
   const ccx = (vw/2 - view.ox)/view.s, ccy = (vh/2 - view.oy)/view.s;
   let best = -1, bd = Infinity;
@@ -1323,9 +1441,15 @@ $('menuBtn').addEventListener('click', () => show('menuModal'));
 $('closeMenu').addEventListener('click', () => hide('menuModal'));
 function resetPiece(){
   order = []; wrongK = new Map(); meta = { time:0, started:0, finished:0 }; undoStack = []; lastAct = 0;
-  rebuild(); renderTray(); selectColor(0); updateProgress(); syncUndo(); save(); fitView();
+  mode = 'classic'; bank = new Int32Array(N);
+  rebuild(); syncModeUI(); renderTray(); selectColor(0); updateProgress(); syncUndo(); save(); fitView();
 }
 $('resetBtn').addEventListener('click', () => { hide('menuModal'); confirmBox('Start over?', `This removes every gem you've placed on ${piece.name}.`, 'Start over', resetPiece); });
+$('fixMenuBtn').addEventListener('click', () => { hide('menuModal');
+  if (filledCount > 0 || wrongK.size) confirmBox('Start Fix-it?', `This scrambles every gem on ${piece.name} into the wrong spot and replaces your current progress.`, 'Scramble it', startFix);
+  else startFix(); });
+$('playClassic').addEventListener('click', () => hide('playModal'));
+$('playFix').addEventListener('click', () => { hide('playModal'); startFix(); });
 $('replayMenuBtn').addEventListener('click', () => { hide('menuModal'); openReplay(false); });
 $('settingsBtn').addEventListener('click', () => { hide('menuModal'); openSettings(); });
 $('backupBtn').addEventListener('click', () => { hide('menuModal'); openBackup(); });
@@ -1428,9 +1552,9 @@ $('replaySave').addEventListener('click', async () => {
 // ---------- Gallery ----------
 let galFilter = 'all';
 function pieceStats(p){
-  const st = p === piece ? { order, time:meta.time, finished:meta.finished } : loadState(p);
+  const st = p === piece ? { order, time:meta.time, finished:meta.finished, mode, wrong:wrongK } : loadState(p);
   const n = st.order.length, tot = p.W*p.H;
-  return { n, tot, pct: Math.floor(n/tot*100), done: n >= tot, time: st.time, order: st.order };
+  return { n, tot, pct: Math.floor(n/tot*100), done: n >= tot, time: st.time, order: st.order, mode: st.mode, fresh: n === 0 && !st.wrong.size };
 }
 function thumb(p, st){
   ensurePiece(p);
@@ -1458,7 +1582,7 @@ function openGallery(){
   for (const p of allPieces()) {
     const st = pieceStats(p);
     const pending = !p.pat && p.paint && !store.get('diamondart.v1.pat.' + p.id);
-    const cat = st.done ? 'done' : st.n > 0 ? 'progress' : 'new';
+    const cat = st.done ? 'done' : !st.fresh ? 'progress' : 'new';
     if (galFilter !== 'all' && galFilter !== cat) continue;
     shown++;
     const d = document.createElement('div'); d.className = 'pc' + (p === piece ? ' cur' : '');
@@ -1469,10 +1593,10 @@ function openGallery(){
     if (pending) { tc = document.createElement('canvas'); tc.width = p.W; tc.height = p.H; tc.style.opacity = '.3';
       queue.push(() => { const t = thumb(p, st); tc.replaceWith(t); meta2.textContent = `${p.W}×${p.H} · ${p.palette.length} colors`; }); }
     else tc = thumb(p, st);
-    meta2.textContent = pending ? `${p.W}×${p.H} · preparing…` : st.done ? `✓ Finished${tm}` : st.n ? `${st.pct || '<1'}% done${tm}` : `${p.W}×${p.H} · ${p.palette.length} colors`;
+    meta2.textContent = pending ? `${p.W}×${p.H} · preparing…` : st.done ? `✓ Finished${tm}` : st.mode === 'fix' ? `🔀 Fix-it · ${st.pct}%${tm}` : st.n ? `${st.pct || '<1'}% done${tm}` : `${p.W}×${p.H} · ${p.palette.length} colors`;
     if (st.n && !st.done) { const bar = document.createElement('div'); bar.className = 'cbar'; const bi = document.createElement('i'); bi.style.width = st.pct+'%'; bar.append(bi); d.append(tc, bar, nm, meta2); }
     else d.append(tc, nm, meta2);
-    d.addEventListener('click', () => { hide('gallery'); if (p !== piece) openPiece(p); });
+    d.addEventListener('click', () => { hide('gallery'); if (p !== piece) openPiece(p); if (pieceStats(p).fresh) show('playModal'); });
     const acts = document.createElement('div'); acts.className = 'acts';
     const mkBtn = (txt, label, fn) => { const x = document.createElement('button'); x.textContent = txt; x.setAttribute('aria-label', label); x.addEventListener('click', e => { e.stopPropagation(); fn(); }); acts.append(x); };
     if (st.done) mkBtn('▶', 'Watch timelapse', () => { hide('gallery'); if (p !== piece) openPiece(p); openReplay(false); });
