@@ -7,7 +7,7 @@
 <style>
   :root { --bg:#221d30; --panel:#2e2741; --panel2:#3a3152; --ink:#f4eefc; --muted:#a79cc0; --accent:#ffc759; }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+  html,body { -webkit-touch-callout:none; margin:0; height:100%; background:var(--bg); color:var(--ink);
     font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     overflow:hidden; overscroll-behavior:none; user-select:none; -webkit-user-select:none; }
   #app { position:fixed; inset:0; display:flex; flex-direction:column; }
@@ -268,7 +268,7 @@
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const BUILD = { n: 5, date: '2026-11-14' };   // bump on every release
+const BUILD = { n: 6, date: '2026-11-14' };   // bump on every release
 $('buildInfo').textContent = `Build ${BUILD.n} · ${BUILD.date}`;
 const store = {
   get(k){ try { return localStorage.getItem(k); } catch(e) { return null; } },
@@ -1104,7 +1104,7 @@ function tick(){
 }
 function placeCorrect(i, fromUndo=false){
   const k = pat[i];
-  filled[i] = 1; rem[k]--; filledCount++; order.push(i);
+  filled[i] = 1; rem[k]--; filledCount++; order.push(i); placedTotal++;
   if (!fromUndo) { undoStack.push({ t:'place', i }); tick(); }
   sparkle((i%W)+.5, ((i/W)|0)+.5, k);
   click(k); buzz(6);
@@ -1165,6 +1165,25 @@ function finishPiece(){
 }
 
 // ---------- Input ----------
+// Touch forgiveness: how far (in screen px) a touch reaches for a matching cell
+const TAP_SNAP = 22, DRAG_SNAP = 14;
+let placedTotal = 0;
+function nearestMatch(x, y, rad){
+  if (selected < 0) return -1;
+  const fx = (x - view.ox)/view.s, fy = (y - view.oy)/view.s, R = Math.min(8, rad/view.s);
+  let best = -1, bd = R*R;
+  for (let r = Math.max(0, Math.floor(fy-R)); r <= Math.min(H-1, Math.floor(fy+R)); r++)
+    for (let c = Math.max(0, Math.floor(fx-R)); c <= Math.min(W-1, Math.floor(fx+R)); c++){
+      const i = r*W+c; if (filled[i] || pat[i] !== selected) continue;
+      const d = (c+.5-fx)**2 + (r+.5-fy)**2; if (d < bd) { bd = d; best = i; }
+    }
+  return best;
+}
+function paintAt(x, y, rad){
+  const { c, r } = cellAt(x, y);
+  if (inGrid(c,r) && !filled[r*W+c] && pat[r*W+c] === selected) { placeCorrect(r*W+c); return; }
+  const i = nearestMatch(x, y, rad); if (i >= 0) placeCorrect(i);
+}
 const ptrs = new Map();
 let gesture = null, lastToast = 0;
 function startPinch(){
@@ -1178,14 +1197,12 @@ cv.addEventListener('pointerdown', e => {
   if (ptrs.size === 1) {
     const wantPaint = placeMode && e.button === 0;
     const cell = cellAt(e.offsetX, e.offsetY);
-    if (wantPaint && view.s < PAINT_MIN) {
-      if (selected >= 0 && performance.now() - lastToast > 2500) { toast('Zoom in to place gems'); lastToast = performance.now(); }
-      gesture = { type:'pan', x:e.offsetX, y:e.offsetY };
-    } else if (wantPaint && inGrid(cell.c, cell.r) && filled[cell.r*W+cell.c] === 2) {
+    if (wantPaint && view.s >= 8 && inGrid(cell.c, cell.r) && filled[cell.r*W+cell.c] === 2) {
       removeWrong(cell.r*W+cell.c); gesture = { type:'none' };
     } else if (wantPaint && selected >= 0) {
-      gesture = { type:'paint', last: cell, start: cell, moved:false };
-      tryPlace(cell.c, cell.r);
+      // Placing works at any zoom; a fingertip snaps to the nearest matching cell
+      gesture = { type:'paint', last: cell, start: cell, moved:false, x0:e.offsetX, y0:e.offsetY, placed0: placedTotal };
+      paintAt(e.offsetX, e.offsetY, TAP_SNAP);
     } else gesture = { type:'pan', x:e.offsetX, y:e.offsetY };
   } else if (ptrs.size === 2) startPinch();
 });
@@ -1195,7 +1212,9 @@ cv.addEventListener('pointermove', e => {
   if (!gesture) return;
   if (gesture.type === 'paint') {
     const cell = cellAt(e.offsetX, e.offsetY);
-    if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { gesture.moved = true; paintLine(gesture.last, cell); gesture.last = cell; }
+    if (Math.hypot(e.offsetX - gesture.x0, e.offsetY - gesture.y0) > 10) gesture.moved = true;
+    if (cell.c !== gesture.last.c || cell.r !== gesture.last.r) { paintLine(gesture.last, cell); gesture.last = cell; }
+    paintAt(e.offsetX, e.offsetY, DRAG_SNAP);
   } else if (gesture.type === 'pan') {
     view.ox += e.offsetX - gesture.x; view.oy += e.offsetY - gesture.y;
     gesture.x = e.offsetX; gesture.y = e.offsetY; clampView(); dirty = true;
@@ -1211,7 +1230,8 @@ function endPtr(e){
   const wasOnly = ptrs.size === 1;
   ptrs.delete(e.pointerId);
   // Free mode: a deliberate single tap on a non-matching empty cell places a wrong gem
-  if (wasOnly && e.type === 'pointerup' && gesture && gesture.type === 'paint' && !gesture.moved && settings.mode === 'free') {
+  if (wasOnly && e.type === 'pointerup' && gesture && gesture.type === 'paint' && !gesture.moved && settings.mode === 'free'
+      && placedTotal === gesture.placed0 && view.s >= PAINT_MIN) {
     const { c, r } = gesture.start;
     if (inGrid(c,r)) { const i = r*W+c; if (!filled[i] && pat[i] !== selected) placeWrong(i); }
   }
